@@ -114,6 +114,10 @@ func (s Results) DecodeResult(r *Reader, version int, b Block) error {
 			continue
 		}
 
+		// Kept so a re-encode can write what the server declared, which the column itself may
+		// report more loosely: a Decimal(10, 2) column is a ColDecimal64.
+		s[i].Type = ColumnType(columnType)
+
 		// Checking column name and type.
 		t := s[i]
 		if t.Name == "" {

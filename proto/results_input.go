@@ -27,6 +27,14 @@ type declaredColumn struct {
 
 func (c declaredColumn) Type() ColumnType { return c.declared }
 
+// Forwarded, or reusing the converted input for another insert would leave this column's rows
+// behind while every other column was cleared.
+func (c declaredColumn) Reset() {
+	if v, ok := c.ColInput.(Resettable); ok {
+		v.Reset()
+	}
+}
+
 // Forwarded, or a column that carries either, such as LowCardinality, is encoded without it.
 
 func (c declaredColumn) EncodeState(b *Buffer) {

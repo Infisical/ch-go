@@ -88,3 +88,46 @@ func TestResultsInputRoundTripsClickHousesOwnBlocks(t *testing.T) {
 		})
 	}
 }
+
+func decimalBlock(t *testing.T, declared string, values ColDecimal64) []byte {
+	t.Helper()
+
+	var b Buffer
+	require.NoError(t, Block{Columns: 1, Rows: len(values)}.EncodeRawBlock(&b, 0, Input{
+		{Name: "d", Data: declaredColumn{ColInput: &values, declared: ColumnType(declared)}},
+	}))
+	return b.Buf
+}
+
+// A caller that decodes into its own typed columns gets no inference, so the declared type has to
+// be recorded there too or a re-encode writes Decimal64 and drops the precision.
+func TestResultsInputKeepsADeclaredTypeOnTypedResults(t *testing.T) {
+	payload := decimalBlock(t, "Decimal(10, 2)", ColDecimal64{100, 250})
+
+	var (
+		block   Block
+		target  ColDecimal64
+		results = Results{{Name: "d", Data: &target}}
+	)
+	r := NewReader(bytes.NewReader(payload))
+	r.SetLimit(1 << 20)
+	require.NoError(t, block.DecodeRawBlock(r, 0, results))
+
+	input, err := results.Input()
+	require.NoError(t, err)
+	require.Equal(t, ColumnType("Decimal(10, 2)"), input[0].Data.Type())
+
+	var again Buffer
+	require.NoError(t, block.EncodeRawBlock(&again, 0, input))
+	require.Equal(t, payload, again.Buf)
+}
+
+// Reusing the converted input for another insert must clear every column, wrapped or not.
+func TestResultsInputResetsAWrappedColumn(t *testing.T) {
+	var values ColDecimal64
+	values.Append(7)
+	input := Input{{Name: "d", Data: declaredColumn{ColInput: &values, declared: "Decimal(10, 2)"}}}
+
+	input.Reset()
+	require.Zero(t, input[0].Data.Rows(), "a wrapped column must be cleared with the rest")
+}
