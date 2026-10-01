@@ -15,6 +15,9 @@ func (c *ColInt32) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows * (32 / 8)); err != nil {
+		return err
+	}
 	*c = append(*c, make([]int32, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	const size = 32 / 8

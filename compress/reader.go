@@ -19,6 +19,20 @@ type Reader struct {
 	raw    []byte
 	header []byte
 	zstd   *zstd.Decoder
+
+	// limit bounds a single frame's declared sizes, which are otherwise allocated before being read.
+	limit int
+}
+
+// SetFrameLimit bounds the compressed and uncompressed size a single frame may declare. Zero, the
+// default, keeps the package's own maximum.
+func (r *Reader) SetFrameLimit(n int) { r.limit = n }
+
+func (r *Reader) frameLimit() int {
+	if r.limit > 0 && r.limit < maxDataSize {
+		return r.limit
+	}
+	return maxDataSize
 }
 
 // FormatU128 formats city.U128 as hex.
@@ -42,11 +56,10 @@ func (r *Reader) readBlock() error {
 		rawSize  = int(binary.LittleEndian.Uint32(r.header[hRawSize:])) - compressHeaderSize
 		dataSize = int(binary.LittleEndian.Uint32(r.header[hDataSize:]))
 	)
-	if dataSize < 0 || dataSize > maxDataSize {
-		return errors.Errorf("data size should be %d < %d < %d", 0, dataSize, maxDataSize)
-	}
-	if rawSize < 0 || rawSize > maxBlockSize {
-		return errors.Errorf("raw size should be %d < %d < %d", 0, rawSize, maxBlockSize)
+	if limit := r.frameLimit(); dataSize < 0 || dataSize > limit {
+		return errors.Errorf("data size should be %d < %d < %d", 0, dataSize, limit)
+	} else if rawSize < 0 || rawSize > limit {
+		return errors.Errorf("raw size should be %d < %d < %d", 0, rawSize, limit)
 	}
 
 	r.data = append(r.data[:0], make([]byte, dataSize)...)

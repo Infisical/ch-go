@@ -73,6 +73,7 @@ func (s *Results) decodeAuto(r *Reader, version int, b Block) error {
 		}
 		*s = append(*s, ResultColumn{
 			Name: columnName,
+			Type: colType,
 			Data: col.Data,
 		})
 	}

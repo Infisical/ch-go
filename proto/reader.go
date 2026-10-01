@@ -29,6 +29,10 @@ type Reader struct {
 	b    *Buffer       // internal buffer
 
 	decompressed io.Reader // decompressed data stream, from raw
+
+	limit          int // bytes left before a read or allocation fails
+	limited        bool
+	frameLimitedTo *compress.Reader
 }
 
 func (r *Reader) ReadByte() (byte, error) {
@@ -65,6 +69,9 @@ func (r *Reader) ReadFull(buf []byte) error {
 }
 
 func (r *Reader) readFull(n int) error {
+	if err := r.Take(n); err != nil {
+		return err
+	}
 	r.b.Ensure(n)
 	return r.ReadFull(r.b.Buf)
 }
@@ -107,6 +114,9 @@ func (r *Reader) StrRaw() ([]byte, error) {
 	n, err := r.StrLen()
 	if err != nil {
 		return nil, errors.Wrap(err, "read length")
+	}
+	if err := r.Take(n); err != nil {
+		return nil, err
 	}
 	r.b.Ensure(n)
 	if _, err := io.ReadFull(r.data, r.b.Buf); err != nil {
@@ -286,10 +296,12 @@ const defaultReaderSize = 1024 * 128 // 128kb
 // NewReader initializes new Reader from provided io.Reader.
 func NewReader(r io.Reader) *Reader {
 	c := bufio.NewReaderSize(r, defaultReaderSize)
+	decompressed := compress.NewReader(c)
 	return &Reader{
-		raw:          c,
-		data:         c,
-		b:            &Buffer{},
-		decompressed: compress.NewReader(c),
+		raw:            c,
+		data:           c,
+		b:              &Buffer{},
+		decompressed:   decompressed,
+		frameLimitedTo: decompressed,
 	}
 }
