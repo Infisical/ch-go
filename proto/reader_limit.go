@@ -27,19 +27,27 @@ func (r *Reader) Limit() int {
 	return r.limit
 }
 
-// SetOnTake registers a function called with each charge before it is allowed, so a caller can
-// account the bytes against a budget of its own, or refuse them. A nil function clears it.
+// SetOnTake reports each charge before it is allowed, so a caller can account the bytes against a
+// budget of its own, or refuse them. It is called whether or not a limit is set. Nil clears it.
 func (r *Reader) SetOnTake(f func(n int) error) { r.onTake = f }
+
+// SetFrameAccount reports what a compressed frame adds to the buffers the reader keeps, which
+// later frames reuse, so the budget charged has to outlive a single packet. Nil clears it.
+func (r *Reader) SetFrameAccount(f func(n int) error) {
+	if r.frameLimitedTo != nil {
+		r.frameLimitedTo.SetFrameAccount(f)
+	}
+}
 
 // Take charges n bytes against the limit before they are read or allocated.
 func (r *Reader) Take(n int) error {
-	if !r.limited {
+	if !r.limited && r.onTake == nil {
 		return nil
 	}
 	if n < 0 {
 		return errors.Wrapf(ErrReadLimit, "negative size %d", n)
 	}
-	if n > r.limit {
+	if r.limited && n > r.limit {
 		return errors.Wrapf(ErrReadLimit, "%d bytes with %d remaining", n, r.limit)
 	}
 	if r.onTake != nil {
@@ -47,6 +55,8 @@ func (r *Reader) Take(n int) error {
 			return err
 		}
 	}
-	r.limit -= n
+	if r.limited {
+		r.limit -= n
+	}
 	return nil
 }

@@ -2,6 +2,7 @@ package proto
 
 import (
 	"bytes"
+	"encoding/binary"
 	"runtime"
 	"testing"
 
@@ -188,5 +189,54 @@ func TestReaderLimitReportsEachChargeToTheCaller(t *testing.T) {
 		r.SetOnTake(func(int) error { return stop })
 		var got ColStr
 		require.ErrorIs(t, got.DecodeColumn(r, 2), stop)
+	})
+}
+
+// A caller may want to see every charge without capping any single one, so the callback does not
+// depend on a limit being set.
+func TestReaderLimitReportsChargesWithoutALimit(t *testing.T) {
+	var strs ColStr
+	strs.AppendArr([]string{"a", "bb"})
+	var encoded Buffer
+	strs.EncodeColumn(&encoded)
+
+	stop := errors.New("no room")
+	r := NewReader(bytes.NewReader(encoded.Buf))
+	r.SetOnTake(func(int) error { return stop })
+	var got ColStr
+	require.ErrorIs(t, got.DecodeColumn(r, 2), stop)
+}
+
+// A frame's buffers are allocated from its header and outlive the packet that brought them, so a
+// caller bounding memory has to see them too.
+func TestReaderLimitReportsAFrameToTheCaller(t *testing.T) {
+	frame := func(rawSize, dataSize uint32) []byte {
+		b := make([]byte, 25)
+		b[16] = 0x82
+		binary.LittleEndian.PutUint32(b[17:], rawSize+9)
+		binary.LittleEndian.PutUint32(b[21:], dataSize)
+		return b
+	}
+
+	t.Run("the frame is charged", func(t *testing.T) {
+		var charged int
+		r := NewReader(bytes.NewReader(frame(64, 128)))
+		r.EnableCompression()
+		r.SetFrameAccount(func(n int) error {
+			charged += n
+			return nil
+		})
+		_, err := r.UVarInt()
+		require.Error(t, err, "the frame carries no real payload")
+		require.Equal(t, 128+64+25, charged)
+	})
+
+	t.Run("a refused frame stops the read", func(t *testing.T) {
+		stop := errors.New("no room")
+		r := NewReader(bytes.NewReader(frame(64, 128)))
+		r.EnableCompression()
+		r.SetFrameAccount(func(int) error { return stop })
+		_, err := r.UVarInt()
+		require.ErrorIs(t, err, stop)
 	})
 }

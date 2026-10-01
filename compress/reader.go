@@ -21,12 +21,35 @@ type Reader struct {
 	zstd   *zstd.Decoder
 
 	// limit bounds a single frame's declared sizes, which are otherwise allocated before being read.
-	limit int
+	limit   int
+	account func(n int) error
 }
 
 // SetFrameLimit bounds the compressed and uncompressed size a single frame may declare. Zero, the
 // default, keeps the package's own maximum.
 func (r *Reader) SetFrameLimit(n int) { r.limit = n }
+
+// SetFrameAccount reports what a frame adds to the buffers the reader keeps, before they are
+// allocated, so a caller can account for them or refuse them. Nil clears it.
+func (r *Reader) SetFrameAccount(f func(n int) error) { r.account = f }
+
+// charge reports what a frame of these sizes would add to the reader's buffers.
+func (r *Reader) charge(rawSize, dataSize int) error {
+	if r.account == nil {
+		return nil
+	}
+	grow := 0
+	if dataSize > cap(r.data) {
+		grow += dataSize - cap(r.data)
+	}
+	if n := rawSize + headerSize; n > cap(r.raw) {
+		grow += n - cap(r.raw)
+	}
+	if grow == 0 {
+		return nil
+	}
+	return r.account(grow)
+}
 
 func (r *Reader) frameLimit() int {
 	if r.limit > 0 && r.limit < maxDataSize {
@@ -60,6 +83,10 @@ func (r *Reader) readBlock() error {
 		return errors.Errorf("data size should be %d < %d < %d", 0, dataSize, limit)
 	} else if rawSize < 0 || rawSize > limit {
 		return errors.Errorf("raw size should be %d < %d < %d", 0, rawSize, limit)
+	}
+
+	if err := r.charge(rawSize, dataSize); err != nil {
+		return err
 	}
 
 	r.data = append(r.data[:0], make([]byte, dataSize)...)
