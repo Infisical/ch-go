@@ -3,6 +3,7 @@ package proto
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -244,6 +245,16 @@ func TestReaderLimitRefusesATypeTooDeepToInfer(t *testing.T) {
 	t.Run("a type any real schema would use", func(t *testing.T) {
 		var c ColAuto
 		require.NoError(t, c.Infer("Array(String)"))
+	})
+
+	// An enum label is text, so its brackets are not wrappers and must not count as nesting.
+	t.Run("an enum whose labels are full of brackets", func(t *testing.T) {
+		labels := make([]string, 200)
+		for i := range labels {
+			labels[i] = fmt.Sprintf("'Error (code %d)' = %d", i, i+1)
+		}
+		var c ColAuto
+		require.NoError(t, c.Infer(ColumnType("Enum16("+strings.Join(labels, ", ")+")")))
 	})
 
 	// The gateway reaches inference through a block, so that is where the refusal has to land.

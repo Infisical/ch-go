@@ -20,11 +20,27 @@ type ColAuto struct {
 const MaxTypeNesting = 128
 
 func (c *ColAuto) Infer(t ColumnType) error {
-	// Counted rather than walked, so the type is never recursed into to find out how deep it is.
-	if n := strings.Count(string(t), "("); n > MaxTypeNesting {
+	if n := typeNesting(string(t)); n > MaxTypeNesting {
 		return errors.Errorf("column type nests %d levels, more than the %d supported", n, MaxTypeNesting)
 	}
 	return c.infer(t)
+}
+
+// typeNesting counts a type's wrappers without recursing into it, skipping anything quoted so an
+// enum label like 'Error (timeout)' does not read as nesting.
+func typeNesting(t string) int {
+	nesting, quoted := 0, false
+	for i := 0; i < len(t); i++ {
+		switch c := t[i]; {
+		case quoted && c == '\\':
+			i++
+		case c == '\'':
+			quoted = !quoted
+		case !quoted && c == '(':
+			nesting++
+		}
+	}
+	return nesting
 }
 
 func (c *ColAuto) infer(t ColumnType) error {
