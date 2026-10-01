@@ -32,6 +32,7 @@ type Reader struct {
 
 	limit          int // bytes left before a read or allocation fails
 	limited        bool
+	onTake         func(n int) error
 	frameLimitedTo *compress.Reader
 }
 

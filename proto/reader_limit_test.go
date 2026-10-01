@@ -162,3 +162,31 @@ func TestReaderLimitBoundsTheBatchAllocation(t *testing.T) {
 	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(96<<20),
 		"a 127 byte row must not reserve 127 bytes for every declared row")
 }
+
+// A caller bounding several readers together needs to see each charge, and to be able to refuse it.
+func TestReaderLimitReportsEachChargeToTheCaller(t *testing.T) {
+	var strs ColStr
+	strs.AppendArr([]string{"a", "bb"})
+	var encoded Buffer
+	strs.EncodeColumn(&encoded)
+
+	t.Run("charges are reported", func(t *testing.T) {
+		var charged int
+		r := limitedReaderOver(t, encoded.Buf, 1<<20)
+		r.SetOnTake(func(n int) error {
+			charged += n
+			return nil
+		})
+		var got ColStr
+		require.NoError(t, got.DecodeColumn(r, 2))
+		require.Positive(t, charged)
+	})
+
+	t.Run("a refused charge stops the decode", func(t *testing.T) {
+		stop := errors.New("no room")
+		r := limitedReaderOver(t, encoded.Buf, 1<<20)
+		r.SetOnTake(func(int) error { return stop })
+		var got ColStr
+		require.ErrorIs(t, got.DecodeColumn(r, 2), stop)
+	})
+}

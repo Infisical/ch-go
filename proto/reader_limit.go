@@ -27,6 +27,10 @@ func (r *Reader) Limit() int {
 	return r.limit
 }
 
+// SetOnTake registers a function called with each charge before it is allowed, so a caller can
+// account the bytes against a budget of its own, or refuse them. A nil function clears it.
+func (r *Reader) SetOnTake(f func(n int) error) { r.onTake = f }
+
 // Take charges n bytes against the limit before they are read or allocated.
 func (r *Reader) Take(n int) error {
 	if !r.limited {
@@ -37,6 +41,11 @@ func (r *Reader) Take(n int) error {
 	}
 	if n > r.limit {
 		return errors.Wrapf(ErrReadLimit, "%d bytes with %d remaining", n, r.limit)
+	}
+	if r.onTake != nil {
+		if err := r.onTake(n); err != nil {
+			return err
+		}
 	}
 	r.limit -= n
 	return nil
