@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/go-faster/errors"
@@ -225,5 +226,40 @@ func TestReaderLimitReportsAFrameToTheCaller(t *testing.T) {
 		r.SetFrameAccount(func(int) error { return stop })
 		_, err := r.UVarInt()
 		require.ErrorIs(t, err, stop)
+	})
+}
+
+// Inference recurses once per wrapper, and a type is as deep as the peer says, so a deep enough one
+// overflows the stack. That is fatal in Go and no recover reaches it, so it has to be refused first.
+func TestReaderLimitRefusesATypeTooDeepToInfer(t *testing.T) {
+	nest := func(depth int) ColumnType {
+		return ColumnType(strings.Repeat("Array(", depth) + "UInt8" + strings.Repeat(")", depth))
+	}
+
+	t.Run("a type deeper than the limit", func(t *testing.T) {
+		var c ColAuto
+		require.ErrorContains(t, c.Infer(nest(MaxTypeNesting+1)), "more than the 128 supported")
+	})
+
+	t.Run("a type any real schema would use", func(t *testing.T) {
+		var c ColAuto
+		require.NoError(t, c.Infer("Array(String)"))
+	})
+
+	// The gateway reaches inference through a block, so that is where the refusal has to land.
+	t.Run("through a decoded block", func(t *testing.T) {
+		b := new(Buffer)
+		b.PutUVarInt(1)
+		b.PutUVarInt(0)
+		b.PutString("c")
+		b.PutString(string(nest(1 << 20)))
+		b.PutBool(false)
+
+		var (
+			block   Block
+			decoded Results
+		)
+		err := block.DecodeRawBlock(limitedReaderOver(t, b.Buf, 64<<20), Version, decoded.Auto())
+		require.ErrorContains(t, err, "more than the 128 supported")
 	})
 }

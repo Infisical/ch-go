@@ -15,7 +15,19 @@ type ColAuto struct {
 }
 
 // Infer and initialize Column from ColumnType.
+// MaxTypeNesting bounds how deeply a column type may nest, since inference recurses once per wrapper
+// and a deep enough type from a peer overflows the stack, which is fatal and cannot be recovered.
+const MaxTypeNesting = 128
+
 func (c *ColAuto) Infer(t ColumnType) error {
+	// Counted rather than walked, so the type is never recursed into to find out how deep it is.
+	if n := strings.Count(string(t), "("); n > MaxTypeNesting {
+		return errors.Errorf("column type nests %d levels, more than the %d supported", n, MaxTypeNesting)
+	}
+	return c.infer(t)
+}
+
+func (c *ColAuto) infer(t ColumnType) error {
 	if c.Data != nil && !c.Type().Conflicts(t) {
 		// Already ok.
 		c.DataType = t // update subtype if needed
