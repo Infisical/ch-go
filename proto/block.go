@@ -110,8 +110,7 @@ type InputColumn struct {
 type ResultColumn struct {
 	Name string    // Name of column. Inferred if not provided.
 	Data ColResult // Data of column, required.
-	// Type as the server declared it, set when the column was inferred. Data.Type() can be
-	// lossier: a Decimal(10, 2) column reads back as Decimal64.
+	// Data.Type() is lossier: a Decimal(10, 2) column reads back as Decimal64.
 	Type ColumnType
 }
 

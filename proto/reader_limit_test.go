@@ -27,8 +27,6 @@ func blockHeader(columnType string, rows uint64) *Buffer {
 	return b
 }
 
-// A size read off the wire is allocated before it is read, so without a limit a peer can make the
-// decoder allocate whatever it claims. These are the sizes a peer controls.
 func TestReaderLimitRefusesASizeBeforeAllocatingIt(t *testing.T) {
 	for name, build := range map[string]func() []byte{
 		"a string row": func() []byte {
@@ -75,7 +73,6 @@ func TestReaderLimitRefusesASizeBeforeAllocatingIt(t *testing.T) {
 	}
 }
 
-// The point of refusing early is that the claim costs what arrived, not what it asked for.
 func TestReaderLimitDoesNotAllocateWhatItRefuses(t *testing.T) {
 	b := blockHeader("String", 1)
 	b.PutUVarInt(512 << 20)
@@ -94,8 +91,6 @@ func TestReaderLimitDoesNotAllocateWhatItRefuses(t *testing.T) {
 	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(4<<20))
 }
 
-// A retained buffer can hold the next string without allocating, and the bytes still have to be
-// charged or a reused column reads past the limit.
 func TestReaderLimitChargesAReusedBuffer(t *testing.T) {
 	var wide ColStr
 	wide.Append(string(make([]byte, 4096)))
@@ -139,10 +134,7 @@ func TestReaderLimitBoundsACompressedFrame(t *testing.T) {
 	require.ErrorContains(t, err, "size should be")
 }
 
-// The string decoder guesses at the rows still to come and allocates for all of them, so a small
-// first row must not let a large row count reserve what the limit could never deliver.
 func TestReaderLimitBoundsTheBatchAllocation(t *testing.T) {
-	// Low enough that the position slice fits the limit, so only the batch guess can overrun it.
 	const rows = 2 << 20
 	b := blockHeader("String", rows)
 	for i := 0; i < 8; i++ {
@@ -164,7 +156,6 @@ func TestReaderLimitBoundsTheBatchAllocation(t *testing.T) {
 		"a 127 byte row must not reserve 127 bytes for every declared row")
 }
 
-// A caller bounding several readers together needs to see each charge, and to be able to refuse it.
 func TestReaderLimitReportsEachChargeToTheCaller(t *testing.T) {
 	var strs ColStr
 	strs.AppendArr([]string{"a", "bb"})
@@ -192,8 +183,6 @@ func TestReaderLimitReportsEachChargeToTheCaller(t *testing.T) {
 	})
 }
 
-// A caller may want to see every charge without capping any single one, so the callback does not
-// depend on a limit being set.
 func TestReaderLimitReportsChargesWithoutALimit(t *testing.T) {
 	var strs ColStr
 	strs.AppendArr([]string{"a", "bb"})
@@ -207,8 +196,6 @@ func TestReaderLimitReportsChargesWithoutALimit(t *testing.T) {
 	require.ErrorIs(t, got.DecodeColumn(r, 2), stop)
 }
 
-// A frame's buffers are allocated from its header and outlive the packet that brought them, so a
-// caller bounding memory has to see them too.
 func TestReaderLimitReportsAFrameToTheCaller(t *testing.T) {
 	frame := func(rawSize, dataSize uint32) []byte {
 		b := make([]byte, 25)

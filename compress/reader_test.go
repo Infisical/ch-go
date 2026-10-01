@@ -14,8 +14,6 @@ func TestFormatU128(t *testing.T) {
 	require.Equal(t, "6ddf3eeebf17df2e559d40c605f3ae22", FormatU128(v))
 }
 
-// A caller enforcing a memory budget is told what a frame adds to the buffers the reader keeps, so
-// that figure must never come in under what those buffers actually grew by.
 func TestFrameAccountCoversTheBuffersItReports(t *testing.T) {
 	sizes := []int{32 << 10, (32 << 10) + 1, 64 << 10, (64 << 10) + 1}
 
@@ -47,5 +45,4 @@ func TestFrameAccountCoversTheBuffersItReports(t *testing.T) {
 
 }
 
-// make rounds a size up to a page, which the reader cannot see before it allocates.
 const allocationSlack = 8 << 10

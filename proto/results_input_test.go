@@ -10,8 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Column types Infer does not cover, listed so the test asserts they are refused rather than
-// silently mis-parsed.
 var uninferableBlocks = map[string]bool{
 	"fixedstring.native":        true,
 	"lc_nullable_string.native": true,
@@ -25,12 +23,10 @@ func decodeBlockFully(payload []byte) (Block, Results, int, error) {
 	counting := &byteCountingReader{src: payload}
 	r := NewReader(counting)
 	r.SetLimit(1 << 20)
-	// A FORMAT Native dump carries no per-column serialization flag, so it reads at revision zero.
 	err := block.DecodeRawBlock(r, 0, decoded.Auto())
 	return block, decoded, counting.read, err
 }
 
-// One byte at a time, so the buffered reader cannot count bytes the decoder never asked for.
 type byteCountingReader struct {
 	src  []byte
 	read int
@@ -74,7 +70,6 @@ func TestResultsInputRoundTripsClickHousesOwnBlocks(t *testing.T) {
 				require.Equal(t, decoded[i].Type, column.Data.Type(), "column %q lost its type", column.Name)
 			}
 
-			// Re-encoding must be stable, or a block would change every time it passed through.
 			var once Buffer
 			require.NoError(t, block.EncodeRawBlock(&once, 0, input))
 			block, decoded, read, err = decodeBlockFully(once.Buf)
@@ -99,8 +94,6 @@ func decimalBlock(t *testing.T, declared string, values ColDecimal64) []byte {
 	return b.Buf
 }
 
-// A caller that decodes into its own typed columns gets no inference, so the declared type has to
-// be recorded there too or a re-encode writes Decimal64 and drops the precision.
 func TestResultsInputKeepsADeclaredTypeOnTypedResults(t *testing.T) {
 	payload := decimalBlock(t, "Decimal(10, 2)", ColDecimal64{100, 250})
 
@@ -122,7 +115,6 @@ func TestResultsInputKeepsADeclaredTypeOnTypedResults(t *testing.T) {
 	require.Equal(t, payload, again.Buf)
 }
 
-// Reusing the converted input for another insert must clear every column, wrapped or not.
 func TestResultsInputResetsAWrappedColumn(t *testing.T) {
 	var values ColDecimal64
 	values.Append(7)

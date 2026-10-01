@@ -2,9 +2,8 @@ package proto
 
 import "github.com/go-faster/errors"
 
-// Input converts decoded results back into columns that can be encoded, which is what a proxy or a
-// round trip needs. The declared type is carried over, because an inferred column reports a lossier
-// one: a Decimal(10, 2) column reads back as Decimal64 and would otherwise be re-encoded as that.
+// Input converts decoded results back into columns that can be encoded. The declared type is
+// carried over, since an inferred Decimal(10, 2) column reads back as the lossier Decimal64.
 func (s Results) Input() (Input, error) {
 	input := make(Input, 0, len(s))
 	for _, column := range s {
@@ -27,8 +26,7 @@ type declaredColumn struct {
 
 func (c declaredColumn) Type() ColumnType { return c.declared }
 
-// Forwarded, or reusing the converted input for another insert would leave this column's rows
-// behind while every other column was cleared.
+// Forwarded, or reusing the input for another insert leaves this column's rows behind.
 func (c declaredColumn) Reset() {
 	if v, ok := c.ColInput.(Resettable); ok {
 		v.Reset()

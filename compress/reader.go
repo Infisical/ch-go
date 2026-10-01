@@ -20,7 +20,6 @@ type Reader struct {
 	header []byte
 	zstd   *zstd.Decoder
 
-	// limit bounds a single frame's declared sizes, which are otherwise allocated before being read.
 	limit   int
 	account func(n int) error
 }
@@ -33,9 +32,8 @@ func (r *Reader) SetFrameLimit(n int) { r.limit = n }
 // allocated, so a caller can account for them or refuse them. Nil clears it.
 func (r *Reader) SetFrameAccount(f func(n int) error) { r.account = f }
 
-// resize returns a zeroed buffer of exactly n bytes, reusing b when it already has the room.
-// Appending instead would grow the buffer past n and allocate a second one to do it, neither of
-// which the frame account can report.
+// Appending instead grows past n and allocates a second buffer to do it, neither of which the
+// frame account can report.
 func resize(b []byte, n int) []byte {
 	if cap(b) < n {
 		return make([]byte, n)
@@ -45,7 +43,6 @@ func resize(b []byte, n int) []byte {
 	return b
 }
 
-// charge reports what a frame of these sizes would add to the reader's buffers.
 func (r *Reader) charge(rawSize, dataSize int) error {
 	if r.account == nil {
 		return nil

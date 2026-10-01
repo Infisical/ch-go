@@ -5,12 +5,8 @@ import "github.com/go-faster/errors"
 // ErrReadLimit is returned when a decode would read or allocate past the reader limit.
 var ErrReadLimit = errors.New("read limit exceeded")
 
-// SetLimit bounds how many bytes the reader may read or allocate before failing, which makes a
-// length taken off the wire safe to act on. Zero, the default, means no limit.
-//
-// Decoding data from an untrusted peer should set this per packet: the protocol has decoders that
-// allocate a declared length before reading it, so an unlimited reader allocates whatever the peer
-// claims. The limit also bounds the sizes a single compressed frame may declare.
+// SetLimit bounds how many bytes the reader may read or allocate before failing, and the sizes a
+// compressed frame may declare. Zero, the default, means no limit.
 func (r *Reader) SetLimit(n int) {
 	r.limit = n
 	r.limited = n > 0
