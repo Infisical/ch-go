@@ -33,6 +33,18 @@ func (r *Reader) SetFrameLimit(n int) { r.limit = n }
 // allocated, so a caller can account for them or refuse them. Nil clears it.
 func (r *Reader) SetFrameAccount(f func(n int) error) { r.account = f }
 
+// resize returns a zeroed buffer of exactly n bytes, reusing b when it already has the room.
+// Appending instead would grow the buffer past n and allocate a second one to do it, neither of
+// which the frame account can report.
+func resize(b []byte, n int) []byte {
+	if cap(b) < n {
+		return make([]byte, n)
+	}
+	b = b[:n]
+	clear(b)
+	return b
+}
+
 // charge reports what a frame of these sizes would add to the reader's buffers.
 func (r *Reader) charge(rawSize, dataSize int) error {
 	if r.account == nil {
@@ -89,9 +101,9 @@ func (r *Reader) readBlock() error {
 		return err
 	}
 
-	r.data = append(r.data[:0], make([]byte, dataSize)...)
-	r.raw = append(r.raw[:0], r.header...)
-	r.raw = append(r.raw, make([]byte, rawSize)...)
+	r.data = resize(r.data, dataSize)
+	r.raw = resize(r.raw, headerSize+rawSize)
+	copy(r.raw, r.header)
 	_ = r.raw[:rawSize+headerSize-1]
 
 	if _, err := io.ReadFull(r.reader, r.raw[headerSize:]); err != nil {
