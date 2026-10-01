@@ -162,6 +162,11 @@ func (c *ColStr) DecodeColumn(r *Reader, rows int) error {
 			} else {
 				an = n
 			}
+			// The batch is a guess at the rows still to come, so it is held to what the limit
+			// could still deliver: bytes that cannot arrive must not be reserved for them.
+			if limit := r.Limit(); limit > 0 && an > limit {
+				an = n
+			}
 			c.Buf = append(c.Buf, make([]byte, an)...)
 		}
 		if err := r.ReadFull(c.Buf[p.Start:p.End]); err != nil {

@@ -137,3 +137,28 @@ func TestReaderLimitBoundsACompressedFrame(t *testing.T) {
 	_, err := r.UVarInt()
 	require.ErrorContains(t, err, "size should be")
 }
+
+// The string decoder guesses at the rows still to come and allocates for all of them, so a small
+// first row must not let a large row count reserve what the limit could never deliver.
+func TestReaderLimitBoundsTheBatchAllocation(t *testing.T) {
+	// Low enough that the position slice fits the limit, so only the batch guess can overrun it.
+	const rows = 2 << 20
+	b := blockHeader("String", rows)
+	for i := 0; i < 8; i++ {
+		b.PutUVarInt(127)
+		b.Buf = append(b.Buf, make([]byte, 127)...)
+	}
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	var (
+		block   Block
+		decoded Results
+	)
+	err := block.DecodeRawBlock(limitedReaderOver(t, b.Buf, 64<<20), Version, decoded.Auto())
+	runtime.ReadMemStats(&after)
+
+	require.Error(t, err)
+	require.Less(t, after.TotalAlloc-before.TotalAlloc, uint64(96<<20),
+		"a 127 byte row must not reserve 127 bytes for every declared row")
+}
