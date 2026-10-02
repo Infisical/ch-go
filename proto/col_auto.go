@@ -26,21 +26,26 @@ func (c *ColAuto) Infer(t ColumnType) error {
 	return c.infer(t)
 }
 
-// typeNesting counts a type's wrappers without recursing into it, skipping anything quoted so an
-// enum label like 'Error (timeout)' does not read as nesting.
+// typeNesting reports how deep a type's wrappers go without recursing into it, skipping anything
+// quoted so an enum label like 'Error (timeout)' does not read as nesting.
 func typeNesting(t string) int {
-	nesting, quoted := 0, false
+	depth, deepest, quoted := 0, 0, false
 	for i := 0; i < len(t); i++ {
 		switch c := t[i]; {
 		case quoted && c == '\\':
 			i++
 		case c == '\'':
 			quoted = !quoted
-		case !quoted && c == '(':
-			nesting++
+		case quoted:
+		case c == '(':
+			if depth++; depth > deepest {
+				deepest = depth
+			}
+		case c == ')':
+			depth--
 		}
 	}
-	return nesting
+	return deepest
 }
 
 func (c *ColAuto) infer(t ColumnType) error {

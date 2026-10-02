@@ -247,6 +247,12 @@ func TestReaderLimitRefusesATypeTooDeepToInfer(t *testing.T) {
 		require.NoError(t, c.Infer("Array(String)"))
 	})
 
+	// Width is not depth: a type with many members side by side is only as deep as its deepest one.
+	t.Run("a wide type that is not deep", func(t *testing.T) {
+		wide := "Tuple(" + strings.Repeat("Array(String), ", 200) + "Array(String))"
+		require.Equal(t, 2, typeNesting(wide))
+	})
+
 	// An enum label is text, so its brackets are not wrappers and must not count as nesting.
 	t.Run("an enum whose labels are full of brackets", func(t *testing.T) {
 		labels := make([]string, 200)
