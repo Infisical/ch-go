@@ -15,6 +15,9 @@ func (c *ColFixedStr128) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows * 128); err != nil {
+		return err
+	}
 	*c = append(*c, make([][128]byte, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	const size = 128

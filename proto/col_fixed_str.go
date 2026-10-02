@@ -79,6 +79,9 @@ func (c ColFixedStr) EncodeColumn(b *Buffer) {
 
 // DecodeColumn decodes ColFixedStr rows from *Reader.
 func (c *ColFixedStr) DecodeColumn(r *Reader, rows int) error {
+	if err := r.Take(rows * c.Size); err != nil {
+		return err
+	}
 	c.Buf = append(c.Buf[:0], make([]byte, rows*c.Size)...)
 	if err := r.ReadFull(c.Buf); err != nil {
 		return errors.Wrap(err, "read full")

@@ -110,6 +110,8 @@ type InputColumn struct {
 type ResultColumn struct {
 	Name string    // Name of column. Inferred if not provided.
 	Data ColResult // Data of column, required.
+	// Data.Type() is lossier: a Decimal(10, 2) column reads back as Decimal64.
+	Type ColumnType
 }
 
 // DecodeResult implements Result as "single result" helper.
@@ -254,6 +256,9 @@ func (b *Block) DecodeRawBlock(r *Reader, version int, target Result) error {
 		if v > maxColumnsInBlock || v < 0 {
 			return errors.Errorf("invalid columns number %d", v)
 		}
+		if limit := r.Limit(); limit > 0 && v > limit {
+			return errors.Wrapf(ErrReadLimit, "%d columns with %d bytes remaining", v, limit)
+		}
 		b.Columns = v
 	}
 	{
@@ -263,6 +268,10 @@ func (b *Block) DecodeRawBlock(r *Reader, version int, target Result) error {
 		}
 		if err := checkRows(v); err != nil {
 			return errors.Wrap(err, "rows count")
+		}
+		// Every column spends at least one byte per row, so a count past the limit cannot be met.
+		if limit := r.Limit(); limit > 0 && v > limit {
+			return errors.Wrapf(ErrReadLimit, "%d rows with %d bytes remaining", v, limit)
 		}
 		b.Rows = v
 	}

@@ -15,6 +15,9 @@ func (c *ColEnum8) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows); err != nil {
+		return err
+	}
 	*c = append(*c, make([]Enum8, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	dst := *(*[]byte)(unsafe.Pointer(&s))

@@ -19,6 +19,52 @@ type Reader struct {
 	raw    []byte
 	header []byte
 	zstd   *zstd.Decoder
+
+	limit   int
+	account func(n int) error
+}
+
+// SetFrameLimit bounds the compressed and uncompressed size a single frame may declare. Zero, the
+// default, keeps the package's own maximum.
+func (r *Reader) SetFrameLimit(n int) { r.limit = n }
+
+// SetFrameAccount reports what a frame adds to the buffers the reader keeps, before they are
+// allocated, so a caller can account for them or refuse them. Nil clears it.
+func (r *Reader) SetFrameAccount(f func(n int) error) { r.account = f }
+
+// Appending instead grows past n and allocates a second buffer to do it, neither of which the
+// frame account can report.
+func resize(b []byte, n int) []byte {
+	if cap(b) < n {
+		return make([]byte, n)
+	}
+	b = b[:n]
+	clear(b)
+	return b
+}
+
+func (r *Reader) charge(rawSize, dataSize int) error {
+	if r.account == nil {
+		return nil
+	}
+	grow := 0
+	if dataSize > cap(r.data) {
+		grow += dataSize - cap(r.data)
+	}
+	if n := rawSize + headerSize; n > cap(r.raw) {
+		grow += n - cap(r.raw)
+	}
+	if grow == 0 {
+		return nil
+	}
+	return r.account(grow)
+}
+
+func (r *Reader) frameLimit() int {
+	if r.limit > 0 && r.limit < maxDataSize {
+		return r.limit
+	}
+	return maxDataSize
 }
 
 // FormatU128 formats city.U128 as hex.
@@ -42,16 +88,19 @@ func (r *Reader) readBlock() error {
 		rawSize  = int(binary.LittleEndian.Uint32(r.header[hRawSize:])) - compressHeaderSize
 		dataSize = int(binary.LittleEndian.Uint32(r.header[hDataSize:]))
 	)
-	if dataSize < 0 || dataSize > maxDataSize {
-		return errors.Errorf("data size should be %d < %d < %d", 0, dataSize, maxDataSize)
-	}
-	if rawSize < 0 || rawSize > maxBlockSize {
-		return errors.Errorf("raw size should be %d < %d < %d", 0, rawSize, maxBlockSize)
+	if limit := r.frameLimit(); dataSize < 0 || dataSize > limit {
+		return errors.Errorf("data size should be %d < %d < %d", 0, dataSize, limit)
+	} else if rawSize < 0 || rawSize > limit {
+		return errors.Errorf("raw size should be %d < %d < %d", 0, rawSize, limit)
 	}
 
-	r.data = append(r.data[:0], make([]byte, dataSize)...)
-	r.raw = append(r.raw[:0], r.header...)
-	r.raw = append(r.raw, make([]byte, rawSize)...)
+	if err := r.charge(rawSize, dataSize); err != nil {
+		return err
+	}
+
+	r.data = resize(r.data, dataSize)
+	r.raw = resize(r.raw, headerSize+rawSize)
+	copy(r.raw, r.header)
 	_ = r.raw[:rawSize+headerSize-1]
 
 	if _, err := io.ReadFull(r.reader, r.raw[headerSize:]); err != nil {

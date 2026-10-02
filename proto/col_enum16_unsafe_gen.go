@@ -15,6 +15,9 @@ func (c *ColEnum16) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows * (16 / 8)); err != nil {
+		return err
+	}
 	*c = append(*c, make([]Enum16, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	const size = 16 / 8

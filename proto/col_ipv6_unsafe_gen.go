@@ -15,6 +15,9 @@ func (c *ColIPv6) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows * (128 / 8)); err != nil {
+		return err
+	}
 	*c = append(*c, make([]IPv6, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	const size = 128 / 8
