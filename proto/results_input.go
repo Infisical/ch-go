@@ -33,14 +33,14 @@ func (c declaredColumn) Reset() {
 	}
 }
 
-// Forwarded, or a column that carries either, such as LowCardinality, is encoded without it.
-
+// Forwarded, since the embedded interface hides it and LowCardinality would lose its state prefix.
 func (c declaredColumn) EncodeState(b *Buffer) {
 	if v, ok := c.ColInput.(StateEncoder); ok {
 		v.EncodeState(b)
 	}
 }
 
+// Forwarded for the same reason, or a column that prepares itself before encoding would skip it.
 func (c declaredColumn) Prepare() error {
 	if v, ok := c.ColInput.(Preparable); ok {
 		return v.Prepare()
