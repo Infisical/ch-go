@@ -14,6 +14,10 @@ func (c *ColUUID) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	const uuidSize = 16
+	if err := r.Take(rows * uuidSize); err != nil {
+		return err
+	}
 	*c = append(*c, make([]uuid.UUID, rows)...)
 
 	// Memory layout of [N]UUID is same as [N*sizeof(UUID)]byte.

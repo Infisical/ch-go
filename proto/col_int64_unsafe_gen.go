@@ -15,6 +15,9 @@ func (c *ColInt64) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows * (64 / 8)); err != nil {
+		return err
+	}
 	*c = append(*c, make([]int64, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))
 	const size = 64 / 8

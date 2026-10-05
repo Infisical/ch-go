@@ -2,6 +2,7 @@ package proto
 
 import (
 	"encoding/binary"
+	"unsafe"
 
 	"github.com/go-faster/errors"
 )
@@ -132,6 +133,9 @@ func (c ColStr) ForEachBytes(f func(i int, b []byte) error) error {
 // DecodeColumn decodes String rows from *Reader.
 func (c *ColStr) DecodeColumn(r *Reader, rows int) error {
 	var p Position
+	if err := r.Take(rows * int(unsafe.Sizeof(p))); err != nil {
+		return err
+	}
 	size := len(c.Pos)
 	if cap(c.Pos) < size+rows {
 		c.Pos = append(c.Pos, make([]Position, size+rows-cap(c.Pos))...)
@@ -147,12 +151,19 @@ func (c *ColStr) DecodeColumn(r *Reader, rows int) error {
 		p.Start = p.End
 		p.End += n
 
+		if err := r.Take(n); err != nil {
+			return errors.Wrapf(err, "row %d", i)
+		}
 		if len(c.Buf) < p.End {
 			var an int
 			if n < 128 {
 				// small size, do batch buffer alloc
 				an = n * (rows - i)
 			} else {
+				an = n
+			}
+			// A guess at the rows still to come must not reserve bytes that cannot arrive.
+			if limit := r.Limit(); limit > 0 && an > limit {
 				an = n
 			}
 			c.Buf = append(c.Buf, make([]byte, an)...)

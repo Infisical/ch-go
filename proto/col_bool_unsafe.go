@@ -26,6 +26,9 @@ func (c *ColBool) DecodeColumn(r *Reader, rows int) error {
 	if rows == 0 {
 		return nil
 	}
+	if err := r.Take(rows); err != nil {
+		return err
+	}
 	*c = append(*c, make([]bool, rows)...)
 	s := *(*slice)(unsafe.Pointer(c))     // #nosec G103
 	dst := *(*[]byte)(unsafe.Pointer(&s)) // #nosec G103

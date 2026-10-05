@@ -73,6 +73,7 @@ func (s *Results) decodeAuto(r *Reader, version int, b Block) error {
 		}
 		*s = append(*s, ResultColumn{
 			Name: columnName,
+			Type: colType,
 			Data: col.Data,
 		})
 	}
@@ -112,6 +113,9 @@ func (s Results) DecodeResult(r *Reader, version int, b Block) error {
 			// Just reading types and names.
 			continue
 		}
+
+		// A re-encode needs what the server declared: a Decimal(10, 2) column is a ColDecimal64.
+		s[i].Type = ColumnType(columnType)
 
 		// Checking column name and type.
 		t := s[i]

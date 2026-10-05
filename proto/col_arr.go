@@ -124,6 +124,9 @@ func (c *ColArr[T]) DecodeColumn(r *Reader, rows int) error {
 	if err := checkRows(size); err != nil {
 		return errors.Wrap(err, "array size")
 	}
+	if limit := r.Limit(); limit > 0 && size > limit {
+		return errors.Wrapf(ErrReadLimit, "%d array elements with %d bytes remaining", size, limit)
+	}
 	if err := c.Data.DecodeColumn(r, size); err != nil {
 		return errors.Wrap(err, "decode data")
 	}
